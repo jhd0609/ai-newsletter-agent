@@ -18,78 +18,47 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 # Initialize the Anthropic client
 client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
-def search_ai_news() -> str:
+def search_and_curate_newsletter() -> str:
     """
-    Use Claude with web search to gather recent AI news.
-    Returns raw search results as context for summarization.
+    Search for AI news and curate into newsletter in a single API call.
+    Reduces token usage by avoiding a second call with the raw search content.
     """
     today = datetime.now()
     week_ago = today - timedelta(days=7)
-    
+
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=4096,
+        max_tokens=2048,
         tools=[{
             "type": "web_search_20250305",
-            "name": "web_search"
+            "name": "web_search",
+            "max_uses": 5
         }],
         messages=[{
             "role": "user",
-            "content": f"""Search for the most significant AI news and developments from the past week 
-            ({week_ago.strftime('%B %d')} to {today.strftime('%B %d, %Y')}).
-            
-            Focus on:
-            - Major model releases or announcements (OpenAI, Anthropic, Google, Meta, etc.)
-            - Significant research breakthroughs
-            - AI policy and regulation news
-            - Notable AI product launches
-            - Important industry moves (funding, acquisitions, partnerships)
-            
-            Search multiple times if needed to get comprehensive coverage.
-            Return a detailed summary of what you find with sources."""
+            "content": f"""Search for the most significant AI news from {week_ago.strftime('%B %d')} to {today.strftime('%B %d, %Y')}, then write a newsletter.
+
+Search for: major AI model releases, research breakthroughs, policy/regulation news, product launches, and industry moves (funding, acquisitions).
+
+Then format the results as a newsletter:
+- One-line TLDR of the week's theme
+- 5-7 most important stories, each with:
+  - *Bold* headline
+  - 2-3 sentence summary
+  - Source attribution
+- "Worth Watching" section with 1-2 developing stories
+- Under 800 words, Slack-compatible formatting (*bold*, _italic_, • for bullets)
+- Professional tone"""
         }]
     )
-    
+
     # Extract text content from response
     result_text = ""
     for block in response.content:
         if hasattr(block, 'text'):
             result_text += block.text
-    
+
     return result_text
-
-
-def curate_newsletter(raw_news: str) -> str:
-    """
-    Take raw news and curate it into a concise newsletter format.
-    """
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2048,
-        messages=[{
-            "role": "user",
-            "content": f"""You are curating a weekly AI newsletter. Based on the following news gathered 
-from the past week, create a concise newsletter with exactly 5-7 of the most important stories.
-
-RAW NEWS:
-{raw_news}
-
-FORMAT REQUIREMENTS:
-- Start with a one-line "TLDR" of the week's theme
-- Each story should have:
-  - A bold headline (use *bold* for Slack)
-  - 2-3 sentence summary explaining why it matters
-  - Source attribution
-- End with a "Worth Watching" section with 1-2 developing stories
-- Keep total length under 800 words
-- Use plain text with Slack-compatible formatting (*bold*, _italic_, • for bullets)
-- No emoji overload - keep it professional
-
-Write the newsletter now:"""
-        }]
-    )
-    
-    return response.content[0].text
 
 
 def format_for_slack(newsletter_content: str) -> dict:
@@ -164,18 +133,13 @@ def run_newsletter_agent():
     print("AI Newsletter Agent")
     print("=" * 50)
     
-    # Step 1: Search for news
-    print("\n[1/3] Searching for AI news from the past week...")
-    raw_news = search_ai_news()
-    print(f"     Found {len(raw_news)} characters of news content")
-    
-    # Step 2: Curate into newsletter
-    print("\n[2/3] Curating newsletter...")
-    newsletter = curate_newsletter(raw_news)
+    # Step 1: Search and curate newsletter
+    print("\n[1/2] Searching for AI news and curating newsletter...")
+    newsletter = search_and_curate_newsletter()
     print(f"     Newsletter ready ({len(newsletter)} characters)")
-    
-    # Step 3: Format and post to Slack
-    print("\n[3/3] Posting to Slack...")
+
+    # Step 2: Format and post to Slack
+    print("\n[2/2] Posting to Slack...")
     slack_payload = format_for_slack(newsletter)
     success = post_to_slack(slack_payload)
     
@@ -198,10 +162,8 @@ if __name__ == "__main__":
         print("WARNING: SLACK_WEBHOOK_URL not set - will print newsletter instead of posting")
         
         # Run without Slack posting for testing
-        print("\n[1/2] Searching for AI news...")
-        raw_news = search_ai_news()
-        print("\n[2/2] Curating newsletter...")
-        newsletter = curate_newsletter(raw_news)
+        print("\n[1/1] Searching for AI news and curating newsletter...")
+        newsletter = search_and_curate_newsletter()
         
         print("\n" + "=" * 50)
         print("NEWSLETTER PREVIEW")
