@@ -14,6 +14,9 @@ pip install -r requirements.txt
 
 # Run the agent
 python newsletter_agent.py
+
+# Trigger the GitHub Actions workflow manually
+gh workflow run "AI Newsletter" --repo jhd0609/ai-newsletter-agent
 ```
 
 There is no test suite, linter, or build system configured.
@@ -23,17 +26,28 @@ There is no test suite, linter, or build system configured.
 - `ANTHROPIC_API_KEY` — required, exits if missing
 - `SLACK_WEBHOOK_URL` — optional, prints newsletter preview to stdout if missing
 
+Both are configured as GitHub Secrets for CI usage.
+
 ## Architecture
 
-Single-file application (`newsletter_agent.py`) with a 3-step pipeline:
+Single-file application (`newsletter_agent.py`) with a 2-step pipeline:
 
-1. **Search** (`search_ai_news`) — calls Claude Sonnet with web search tool to gather AI news from the past 7 days
-2. **Curate** (`curate_newsletter`) — calls Claude Sonnet to select 5-7 top stories and format as a newsletter (max 800 words, Slack markdown)
-3. **Distribute** (`format_for_slack` + `post_to_slack`) — converts to Slack Block Kit JSON and posts via webhook
+1. **Search & Curate** (`search_and_curate_newsletter`) — single Claude Sonnet API call with the `web_search_20250305` tool (capped at 5 searches via `max_uses`) that gathers AI news from the past 7 days and formats it into a newsletter in one pass
+2. **Distribute** (`format_for_slack` + `post_to_slack`) — converts to Slack Block Kit JSON and posts via webhook
 
 `run_newsletter_agent()` orchestrates the full pipeline.
 
+### Slack Block Kit constraints
+
+`format_for_slack` splits newsletter content into multiple `section` blocks to stay under Slack's 3000 character per-block limit. It splits on paragraph boundaries (`\n\n`).
+
+## CI/CD
+
+GitHub Actions workflow at `.github/workflows/newsletter.yml`:
+- Runs automatically every Monday at 8:00 AM Pacific (cron: `0 15 * * 1`)
+- Can be triggered manually via `workflow_dispatch`
+
 ## Customization
 
-- News topics/sources: edit the search prompt in `search_ai_news()`
-- Newsletter format/tone/story count: edit the curation prompt in `curate_newsletter()`
+- News topics/sources: edit the search prompt in `search_and_curate_newsletter()`
+- Newsletter format/tone/story count: edit the format instructions in the same function
