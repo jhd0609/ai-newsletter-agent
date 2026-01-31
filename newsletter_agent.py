@@ -67,40 +67,37 @@ def format_for_slack(newsletter_content: str) -> dict:
     """
     today = datetime.now()
     
-    return {
-        "blocks": [
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": f"🤖 AI Weekly — {today.strftime('%B %d, %Y')}",
-                    "emoji": True
-                }
-            },
-            {
-                "type": "divider"
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": newsletter_content
-                }
-            },
-            {
-                "type": "divider"
-            },
-            {
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": "Curated by your AI Newsletter Agent • Powered by Claude"
-                    }
-                ]
+    blocks = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"🤖 AI Weekly — {today.strftime('%B %d, %Y')}",
+                "emoji": True
             }
-        ]
-    }
+        },
+        {"type": "divider"},
+    ]
+
+    # Split content into chunks under 3000 chars (Slack section block limit)
+    # Split on double newlines to avoid breaking mid-story
+    paragraphs = newsletter_content.split("\n\n")
+    chunk = ""
+    for para in paragraphs:
+        if len(chunk) + len(para) + 2 > 3000:
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": chunk.strip()}})
+            chunk = ""
+        chunk += para + "\n\n"
+    if chunk.strip():
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": chunk.strip()}})
+
+    blocks.append({"type": "divider"})
+    blocks.append({
+        "type": "context",
+        "elements": [{"type": "mrkdwn", "text": "Curated by your AI Newsletter Agent • Powered by Claude"}]
+    })
+
+    return {"blocks": blocks}
 
 
 def post_to_slack(payload: dict) -> bool:
